@@ -1,0 +1,99 @@
+drop database if exists  Avalon;
+create database Avalon;
+use Avalon;
+ 
+ create table clients (
+ id int auto_increment primary key not null,
+ name varchar(255) not null, 
+ phoneNumber varchar(20) not null,
+ email varchar(50)
+ );
+ 
+ create table tables(
+ id int auto_increment not null primary key,
+ smokingType enum ('Smoking', 'No smoking'),
+ numberOfChairs int
+ );
+ 
+ create table reservations(
+ id int auto_increment not null primary key,
+ table_id int not null,
+ client_id int not null,
+ hourOfReservation time not null,
+ dateOfReservation date not null,
+ deposit double,
+ numberOfPeople int not null,
+ constraint foreign key (table_id) references tables(id),
+ constraint foreign key(client_id) references clients(id)
+ );
+
+# Извежда всички полета на таблицата tables, където масите са за пушачи
+select *
+from tables
+where smokingType='Smoking';
+ 
+# Извежда среден депозит за масите групирани по тип
+select avg(reservations.deposit) as averageDeposit, tables.smokingType as TableType
+from reservations join tables
+where reservations.table_id=tables.id
+group by smokingType
+;
+ 
+ # Извежда имена на клиент и часа му на резервация
+ select clients.name, reservations.hourOfReservation
+ from clients join reservations 
+ on clients.id in(select client_id
+ from reservations join tables
+ where reservations.table_id=tables.id)
+ ;
+ 
+ # Извежда имената и номера на клиент, както и датата, часа на резервация и броя на гостите>6
+select clients.name as ClientName, clients.phoneNumber as PhoneNumber, reservations.dateOfReservation as Date, reservations.hourOfReservation as HourOfReservation, reservations.numberOfPeople as NumberOfPeople
+from clients right outer join reservations
+on clients.id=reservations.client_id
+where NumberOfPeople>6
+;
+
+# Извежда броят на масите с депозит над 100$ и за непушачи, часа и датата на резервация групирани по дата
+select count(tables.id) as tablesWithDepositOver100$, reservations.deposit as Deposit, reservations.hourOfReservation as HourOfReservation, reservations.dateOfReservation as ReservationDate
+from tables join reservations
+on tables.id=reservations.table_id
+where smokingType='No smoking'
+group by ReservationDate
+having Deposit>100
+; 
+
+# Процедура с курсор
+drop procedure if exists ProcedureWithCursor;
+delimiter &
+create procedure ProcedureWithCursor()
+begin
+declare finished int;
+declare tempDeposit double;
+declare tempName varchar(100);
+declare tempType enum('Smoking', 'No smoking');
+declare reservationCursor cursor for
+select clients.name as Client, reservations.deposit as Deposit, tables.smokingType as TableType
+from clients join reservations
+on clients.id=reservations.client_id
+join tables
+on reservations.table_id=tables.id
+where tableType='No smoking';
+declare continue handler for not found set finished = 1;
+set finished = 0;
+open reservationCursor;
+reservation_loop: while( finished = 0)
+do
+fetch reservationCursor into tempName, tempDeposit, tempType;
+      if(finished = 1)
+      then
+	  leave reservation_loop;
+      end if;	
+	  select tempName, tempDeposit, tempType;
+end while;
+close reservationCursor;
+set finished = 0;
+select 'Finished!';
+end;
+&
+delimiter ;
